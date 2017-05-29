@@ -1,27 +1,22 @@
 from machine import Pin, PWM
 from encoder import Encoder
-from time import sleep_ms
+from time import sleep_us, sleep_ms
 
 pwm = PWM(Pin(4))
 button = Pin(14, Pin.IN, Pin.PULL_UP)
 pressed = False
 
-def button_pressed(p):
+def button_pressed(_):
     global pressed
     pressed = True
 
 button.irq(trigger=Pin.IRQ_FALLING, handler=button_pressed)
 
-def fade(start=0, end=1000, step=1, sleep=1):
-    ''' Adjust the duty of the PWM signal to generate a fade-in or out. '''
+def fade(start=0, end=1020, step=1, duration_ms=1000):
+    sleep_interval_us = duration_ms * 1000 // abs(end-start)
     for i in range(start, end, step):
         pwm.duty(i)
-        sleep_ms(sleep)
-
-def fio():
-    ''' Helper function: Fade in then out '''
-    fade()
-    fade(999,-1,-1)
+        sleep_us(sleep_interval_us)
 
 def main(enc):
     global pressed
@@ -45,10 +40,10 @@ def main(enc):
                 sleep_ms(100) # Debounce duration
                 if on: # Turning off, fading out
                     print('Turning off at {}'.format(val))
-                    fade(start=val, end=-1, step=-1)
+                    fade(val, -1, -1)
                 else: # Turning on, fading in
                     print('Turning on. val = {}, oldval = {}, enc.val = {}'.format(val, oldval, enc.value))
-                    fade(start=0, end=val+1)
+                    fade(0, val + 1)
                     enc._value = val
                 pressed = False
                 on = not on
