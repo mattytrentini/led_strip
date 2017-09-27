@@ -1,90 +1,99 @@
 import uasyncio as asyncio
 from machine import Pin, PWM
 from encoder import Encoder
-from time import sleep_us, sleep_ms
-
-pwm = PWM(Pin(15))
-button = Pin(14, Pin.IN, Pin.PULL_UP)
-pressed = False
-
-def button_pressed(_):
-    global pressed
-    pressed = True
-
-button.irq(trigger=Pin.IRQ_FALLING, handler=button_pressed)
-
-queue = []
-val = 0
-
-async def switch_loop():
-    global pressed
-    global queue
-    global val
-    on = False
-    while True:
-        if pressed:
-            asyncio.sleep(0.100) # Debounce duration
-            if on: # Turning off, fading out
-                print('Turning off at {}'.format(val))
-                queue.append([val, -1])
-            else: # Turning on, fading in
-                #print('Turning on. val = {}, oldval = {}, enc.val = {}'.format(val, oldval, enc.value))
-                queue.append([0, val+1])
-                enc._value = val
-            pressed = False
-            on = not on
-        await asyncio.sleep(0.100)
-
-async def encoder_loop(enc):
-    global queue
-    global val
-    oldval = 0
-    val = enc.value
-    while True:
-        val = enc.value
-        enc.cur_accel = max(0, enc.cur_accel - enc.accel)
-        if oldval != val:
-            print(val)
-            queue.append([oldval, val])
-            oldval = val
-        await asyncio.sleep(0.100)
-
-async def fader_loop():
-    global queue
-
-    async def fade(old_value, new_value):
-        for value in range(old_value, new_value, 1 if new_value >= old_value else -1):
-            pwm.duty(value)
-            #print('pwm.duty({0})'.format(value))
-            await asyncio.sleep(0.001)
-            if queue:
-                queue[0][0] = value
-                break
-
-    while True:
-        if queue:
-            old_value, new_value = queue.pop(0)
-            await fade(old_value, new_value)
-        await asyncio.sleep(0.100)
-
-def main(enc):
-    global pressed
-
-    rate = 20
-    oldval = 0
-    on = False
-
-    val = enc.value
-    loop = asyncio.get_event_loop()
-    loop.create_task(switch_loop())
-    loop.create_task(encoder_loop(enc))
-    #try:
-    loop.run_until_complete(fader_loop())
-    #except:
-    #    enc.close()
 
 
-enc = Encoder(pin_clk=13, pin_dt=12, pin_mode=Pin.PULL_UP,
-              min_val=40, max_val=1020, clicks=1, accel=5)
-enc._value = 1020
-main(enc)
+class LedStripController:
+
+    def __init__(self, enc):
+
+        self.enc = enc
+        self.is_on = False
+        self.enc_cur_val = 0
+        self.fader_target_val = 0
+
+    async def switch_loop(self, enc):
+
+        def button_handler(_):
+            nonlocal button_pressed 
+            button_pressed = True
+
+        button_pressed = False
+
+        button = Pin(14, Pin.IN, Pin.PULL_UP)
+        button.irq(trigger=Pin.IRQ_FALLING, handler=button_handler)
+
+        while True:
+            if button_pressed:
+                asyncio.sleep(0.100) # Debounce duration
+                if self.is_on:
+                    # Turning off, fading out
+                    print('Turning off at {}'.format(self.enc_cur_val))
+                    self.fader_target_val = 0
+                else:
+                    # Turning on, fading in
+                    #print('Turning on. self.enc_cur_val = {}, oldval = {}, enc.val = {}'.format(self.enc_cur_val, oldval, enc.value))
+                    self.fader_target_val = enc._value = self.enc_cur_val
+                button_pressed = False
+                self.is_on = not self.is_on
+            await asyncio.sleep(0.100)
+
+    async def encoder_loop(self, enc):
+
+        oldval = 0
+
+        while True:
+            if self.is_on:
+                self.enc_cur_val = enc.value
+                enc.cur_accel = max(0, enc.cur_accel - enc.accel)
+                if oldval != self.enc_cur_val:
+                    #print(self.enc_cur_val)
+                    self.fader_target_val = oldval = self.enc_cur_val
+            await asyncio.sleep(0.100)
+
+    async def fader_loop(self):
+
+        FADER_MAX_STEP = 5
+        FADER_DELAY = 0.005
+
+        fader = PWM(Pin(15))
+        fader_cur_val = 0
+
+        while True:
+
+            if self.fader_target_val > fader_cur_val:
+                step = min(FADER_MAX_STEP, self.fader_target_val - fader_cur_val)
+            elif self.fader_target_val < fader_cur_val:
+                step = -min(FADER_MAX_STEP, fader_cur_val - self.fader_target_val)
+            else:
+                step = 0
+
+            fader_cur_val += step
+            fader.duty(fader_cur_val)
+
+            await asyncio.sleep(FADER_DELAY)
+
+    def run(self):
+
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.switch_loop(self.enc))
+        loop.create_task(self.encoder_loop(self.enc))
+
+        try:
+            loop.run_until_complete(self.fader_loop())
+        finally:
+            self.enc.close()
+
+
+def main():
+
+    enc = Encoder(pin_clk=13, pin_dt=12, pin_mode=Pin.PULL_UP,
+                  min_val=40, max_val=1020, clicks=1, accel=5)
+    enc._value = 1020
+
+    controller = LedStripController(enc)
+    controller.run()
+
+
+if __name__ == '__main__':
+    main()
