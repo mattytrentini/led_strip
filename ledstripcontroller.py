@@ -5,7 +5,7 @@ from encoder import Encoder
 
 class LedStripController:
 
-    def __init__(self, enc, button_pin = 14, fader_pins = (15,)):
+    def __init__(self, enc, button_pin = 14, fader_pins = (15, )):
         self.enc = enc
         self.is_on = False
         self.enc_cur_val = 0
