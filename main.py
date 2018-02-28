@@ -8,7 +8,11 @@ def main():
                   min_val=40, max_val=1020, clicks=1, accel=5)
     enc._value = 1020
 
-    controller = LedStripController(enc, button_pin=2, fader_pins=(12, 13, 14))
+    fader_pins = [PWM(Pin(pin_num)) for pin_num in (12, 13, 14)]
+    button = Pin(2, Pin.IN, Pin.PULL_UP)
+    controller = LedStripController(enc, button_pin=button, fader_pins=fader_pins)
+    button.irq(trigger=Pin.IRQ_FALLING, handler=lambda _: controller.toggle_led_state())
+
     controller.run()
 
 

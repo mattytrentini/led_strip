@@ -1,0 +1,3 @@
+[submodule "micropython-stm-lib"]
+	path = micropython-stm-lib
+	url = https://github.com/SpotlightKid/micropython-stm-lib
