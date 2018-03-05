@@ -53,7 +53,7 @@ class LedStripController:
                 if oldval != self.enc_cur_val:
                     print('Old enc. val: %i, new enc. val: %i' % (oldval, self.enc_cur_val))
                     self.fader_target_val = oldval = self.enc_cur_val
-            await asyncio.sleep_ms(100)
+            await asyncio.sleep_ms(50)
 
     async def fader_loop(self):
 
@@ -72,8 +72,9 @@ class LedStripController:
                 step = 0
 
             fader_cur_val += step
-            for fader in self.fader_pins:
-                fader.duty(fader_cur_val)
+            if abs(step) > 0:
+                for fader in self.fader_pins:
+                    fader.duty(fader_cur_val)
 
             await asyncio.sleep_ms(FADER_DELAY_MS)
 
