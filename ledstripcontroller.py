@@ -1,4 +1,5 @@
 import uasyncio as asyncio
+import utime
 
 class LedStripController:
 
@@ -14,6 +15,8 @@ class LedStripController:
         self.button_pin = button_pin
         self.fader_pins = fader_pins
         self.button_pressed = False
+        self.timings = []
+        self.pwm_values = []
 
     def toggle_led_state(self):
         self.button_pressed = True
@@ -25,7 +28,7 @@ class LedStripController:
 
         while True:
             if self.button_pressed:
-                # TODO should removedebouncing; should be handled outside of this class.
+                # TODO should remove debouncing; should be handled outside of this class.
                 # Shouldn't care that it's a button that triggers the change...
                 asyncio.sleep_ms(100) # Debounce duration
                 # Only alter state if button still pressed (not a transient event)
@@ -53,6 +56,11 @@ class LedStripController:
                 if oldval != self.enc_cur_val:
                     print('Old enc. val: %i, new enc. val: %i' % (oldval, self.enc_cur_val))
                     self.fader_target_val = oldval = self.enc_cur_val
+                    #print(','.join([str(round(ti,2)) for ti in self.timings]))
+                    print(','.join([str(round(j-i, 2)) for i, j in zip(self.timings[:-1], self.timings[1:])]))
+                    print(','.join([str(pv) for pv in self.pwm_values]))
+                    self.timings = []
+                    self.pwm_values = []
             await asyncio.sleep_ms(50)
 
     async def fader_loop(self):
@@ -75,6 +83,8 @@ class LedStripController:
             if abs(step) > 0:
                 for fader in self.fader_pins:
                     fader.duty(fader_cur_val)
+                self.timings.append(utime.ticks_ms())
+                self.pwm_values.append(fader_cur_val)
 
             await asyncio.sleep_ms(FADER_DELAY_MS)
 
