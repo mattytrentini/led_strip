@@ -10,7 +10,6 @@ class LedStripController:
         '''
         self.enc = enc
         self.is_on = False
-        self.enc_cur_val = 0
         self.fader_target_val = 0
         self.button_pin = button_pin
         self.fader_pins = fader_pins
@@ -23,7 +22,7 @@ class LedStripController:
         self.button_pressed = True
         self.log('Button pressed!')
 
-    async def button_loop(self, enc):
+    async def button_loop(self):
 
         self.button_pressed = False
 
@@ -36,27 +35,26 @@ class LedStripController:
                 if not self.button_pin.value():
                     if self.is_on:
                         # Turning off, fading out
-                        self.log('Turning off at {}'.format(self.enc_cur_val))
+                        self.log('Turning off at {}'.format(self.enc.value))
                         self.fader_target_val = 0
                     else:
                         # Turning on, fading in
-                        self.log('Turning on at {}'.format(self.enc_cur_val))
-                        self.fader_target_val = enc._value = self.enc_cur_val
+                        self.log('Turning on at {}'.format(self.enc.value))
+                        self.fader_target_val = self.enc.value
                     self.button_pressed = False
                     self.is_on = not self.is_on
             await asyncio.sleep_ms(100)
 
-    async def encoder_loop(self, enc):
+    async def encoder_loop(self):
 
         oldval = 0
 
         while True:
             if self.is_on:
-                self.enc_cur_val = enc.value
-                enc.cur_accel = max(0, enc.cur_accel - enc.accel)
-                if oldval != self.enc_cur_val:
-                    self.log('Old enc. val: %i, new enc. val: %i' % (oldval, self.enc_cur_val))
-                    self.fader_target_val = oldval = self.enc_cur_val
+                self.enc.cur_accel = max(0, self.enc.cur_accel - self.enc.accel)
+                if oldval != self.enc.value:
+                    self.log('Old enc. val: %i, new enc. val: %i' % (oldval, self.enc.value))
+                    self.fader_target_val = oldval = self.enc.value
 
                     self.log(','.join([str(round(j-i, 2)) for i, j in zip(self.timings[:-1], self.timings[1:])]))
                     self.log(','.join([str(pv) for pv in self.pwm_values]))
@@ -68,7 +66,7 @@ class LedStripController:
     async def fader_loop(self):
 
         FADER_MAX_STEP = 5
-        FADER_DELAY_MS = 20
+        FADER_DELAY_MS = 10
 
         fader_cur_val = 0
 
@@ -104,8 +102,8 @@ class LedStripController:
     def run(self):
 
         loop = asyncio.get_event_loop()
-        loop.create_task(self.button_loop(self.enc))
-        loop.create_task(self.encoder_loop(self.enc))
+        loop.create_task(self.button_loop())
+        loop.create_task(self.encoder_loop())
         loop.create_task(self.debug_log_loop())
 
         try:
