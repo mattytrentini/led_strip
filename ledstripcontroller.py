@@ -56,8 +56,8 @@ class LedStripController:
                     self.log('Old enc. val: %i, new enc. val: %i' % (oldval, self.enc.value))
                     self.fader_target_val = oldval = self.enc.value
 
-                    self.log(','.join([str(round(j-i, 2)) for i, j in zip(self.timings[:-1], self.timings[1:])]))
-                    self.log(','.join([str(pv) for pv in self.pwm_values]))
+                    self.log('T ({}): {}'.format(len(self.timings), ','.join(['{:4d}'.format(t) for t in self.timings])))
+                    self.log('P ({}): {}'.format(len(self.pwm_values), ','.join(['{:4d}'.format(pv) for pv in self.pwm_values])))
 
                     self.timings.clear()
                     self.pwm_values.clear()
@@ -65,13 +65,14 @@ class LedStripController:
 
     async def fader_loop(self):
 
-        FADER_MAX_STEP = 5
-        FADER_DELAY_MS = 10
+        FADER_MAX_STEP = 13
+        FADER_DELAY_MS = 20
 
         fader_cur_val = 0
+        time_since_last_step = utime.ticks_ms()
 
         while True:
-
+            # Can improve this logic...use abs and *-1!
             if self.fader_target_val > fader_cur_val:
                 step = min(FADER_MAX_STEP, self.fader_target_val - fader_cur_val)
             elif self.fader_target_val < fader_cur_val:
@@ -83,9 +84,10 @@ class LedStripController:
             if abs(step) > 0:
                 for fader in self.fader_pins:
                     fader.duty(fader_cur_val)
-                self.timings.append(utime.ticks_ms())
+                self.timings.append(utime.ticks_ms() - time_since_last_step)
                 self.pwm_values.append(fader_cur_val)
 
+            time_since_last_step = utime.ticks_ms()
             await asyncio.sleep_ms(FADER_DELAY_MS)
 
     async def debug_log_loop(self):
@@ -97,7 +99,8 @@ class LedStripController:
             await asyncio.sleep_ms(500)
 
     def log(self, debug_string):
-        self.debug_log.append(debug_string)
+        #self.debug_log.append(debug_string)
+        pass
 
     def run(self):
 
