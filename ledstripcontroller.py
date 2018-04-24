@@ -9,11 +9,13 @@ class LedStripController:
         '''
         self.enc = enc
         self.is_on = False
-        self.enc_cur_val = 0
+        self.enc_cur_val = 511
         self.fader_target_val = 0
         self.button_pin = button_pin
         self.fader_pins = fader_pins
         self.button_pressed = False
+        for fader in self.fader_pins:
+            fader.duty(0)
 
     def toggle_led_state(self):
         self.button_pressed = True
@@ -77,14 +79,3 @@ class LedStripController:
                     fader.duty(fader_cur_val)
 
             await asyncio.sleep_ms(FADER_DELAY_MS)
-
-    def run(self):
-
-        loop = asyncio.get_event_loop()
-        loop.create_task(self.switch_loop(self.enc))
-        loop.create_task(self.encoder_loop(self.enc))
-
-        try:
-            loop.run_until_complete(self.fader_loop())
-        finally:
-            self.enc.close()
