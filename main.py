@@ -8,31 +8,37 @@ from sys import platform
 debounce_check = False
 controller = None
 countdown_timer = Timer(-1)
+BUTTON_PIN = None
+PIR_PIN = None
 
-def button_debounce(pin):
-    global debounce_check, controller
-    
-    if not debounce_check:
-        debounce_check = True
-        asyncio.sleep_ms(100) # Debounce duration
-        # Only alter state if button still pressed (not a transient event)
-        if not pin.value():
-            controller.toggle_led_state()
-        debounce_check = False
+def get_pin_num(pin):
+    return int(str(pin).split('(')[1].split(')')[0])
 
-def pir_handler(pin):
-    global controller, countdown_timer
-    
-    if pin.value():
-        countdown_timer.deinit()
-        print("Motion detected!")
-        controller.led_state_on()
-    else:
-        print("Motion ceased...")
-        countdown_timer.init(period=300000, mode=Timer.ONE_SHOT, callback=controller.led_state_off)
-        
+def irq_handler(pin):
+    global controller, BUTTON_PIN, PIR_PIN
+    pin_num = get_pin_num(pin)
+    if pin_num == BUTTON_PIN:
+        global debounce_check
+        if not debounce_check:
+            debounce_check = True
+            asyncio.sleep_ms(100) # Debounce duration
+            # Only alter state if button still pressed (not a transient event)
+            if not pin.value():
+                controller.toggle_led_state()
+            debounce_check = False
+    elif pin_num == PIR_PIN:
+        global countdown_timer
+        if pin.value():
+            countdown_timer.deinit()
+            print("Motion detected!")
+            controller.led_state_on()
+        else:
+            print("Motion ceased...")
+            countdown_timer.init(period=300000, mode=Timer.ONE_SHOT, callback=controller.led_state_off)
+
 
 def main():
+    global BUTTON_PIN, PIR_PIN
     dev_type = platform
     if dev_type == 'esp8266': # WEMOS D1 Mini (or similar)
         ENC_PINS = {'clk':4, 'dt':5}
@@ -61,10 +67,10 @@ def main():
     controller = LedStripController(enc, fader_pins=fader_pins)
     
     button = Pin(BUTTON_PIN, Pin.IN, Pin.PULL_UP)
-    button.irq(trigger=Pin.IRQ_FALLING, handler=lambda _: controller.toggle_led_state())
+    button.irq(trigger=Pin.IRQ_FALLING, handler=irq_handler)
     
     pir = Pin(PIR_PIN, Pin.IN)
-    pir.irq(trigger=(Pin.IRQ_FALLING | Pin.IRQ_RISING), handler=pir_handler)
+    pir.irq(trigger=(Pin.IRQ_FALLING | Pin.IRQ_RISING), handler=irq_handler)
 
     loop = asyncio.get_event_loop()
     loop.create_task(controller.switch_loop(controller.enc))
